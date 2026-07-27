@@ -11,10 +11,22 @@ export default function Home(): React.JSX.Element {
           This portal publishes a searchable, first-class API reference for partners using the
           canonical <code>openapi.yaml</code> in this repository.
         </p>
+        {/* Internal link — uses Docusaurus <Link> which handles routing correctly */}
         <p>
           <Link className="button button--primary button--lg" to="/api">
             Open API Reference
           </Link>
+        </p>
+        {/* External links must open in new tab with noopener noreferrer (#231) */}
+        <p>
+          <a
+            href="https://github.com/sublime247/proxypay"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="button button--secondary"
+          >
+            View on GitHub
+          </a>
         </p>
       </main>
     </Layout>
