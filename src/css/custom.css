@@ -1,3 +1,4 @@
+/* ─── Theme tokens ───────────────────────────────────────────────────────────── */
 :root {
   --ifm-color-primary: #2e8555;
   --ifm-color-primary-dark: #29784c;
@@ -6,9 +7,167 @@
   --ifm-color-primary-light: #33925e;
   --ifm-color-primary-lighter: #359962;
   --ifm-color-primary-lightest: #3cad6e;
+
+  --api-error-bg: #fff5f5;
+  --api-error-border: #e53e3e;
+  --api-error-title: #c53030;
+  --api-error-text: #2d3748;
+  --api-error-hint: #718096;
 }
 
-/* Code block copy button styling */
+[data-theme='dark'] {
+  --api-error-bg: #2d1515;
+  --api-error-border: #fc8181;
+  --api-error-title: #fc8181;
+  --api-error-text: #e2e8f0;
+  --api-error-hint: #a0aec0;
+}
+
+/* ─── #216 – Keyboard navigation: visible focus ───────────────────────────── */
+
+/*
+ * Browsers hide the default focus ring on mouse-click but show it on keyboard
+ * navigation (:focus-visible). We reinforce it for all interactive elements
+ * inside the API reference and across the rest of the site.
+ */
+*:focus-visible {
+  outline: 3px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Redoc renders its own interactive elements; give them the same treatment */
+.api-reference-wrapper *:focus-visible,
+.api-reference-wrapper [tabindex='0']:focus-visible,
+.api-reference-wrapper [role='button']:focus-visible,
+.api-reference-wrapper [role='tab']:focus-visible,
+.api-reference-wrapper [role='treeitem']:focus-visible,
+.api-reference-wrapper [role='menuitem']:focus-visible,
+.api-reference-wrapper a:focus-visible {
+  outline: 3px solid var(--ifm-color-primary) !important;
+  outline-offset: 2px !important;
+  border-radius: 2px !important;
+  box-shadow: 0 0 0 3px rgba(46, 133, 85, 0.25) !important;
+}
+
+/* ─── #214 – Sidebar scroll: smooth scrolling ────────────────────────────── */
+.menu-content,
+[data-role='sidebar'],
+.redoc-sidebar {
+  scroll-behavior: smooth;
+}
+
+/* ─── #215 – Error handling: loading state ───────────────────────────────── */
+.api-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  font-size: 1.1rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.api-loading::before {
+  content: '';
+  display: inline-block;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-right: 0.75rem;
+  border: 3px solid var(--ifm-color-primary-lighter);
+  border-top-color: var(--ifm-color-primary);
+  border-radius: 50%;
+  animation: api-spin 0.8s linear infinite;
+}
+
+@keyframes api-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── #215 – Error handling: error banner ────────────────────────────────── */
+.api-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  max-width: 680px;
+  margin: 4rem auto;
+  padding: 1.5rem 2rem;
+  background: var(--api-error-bg);
+  border: 2px solid var(--api-error-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.api-error-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.api-error-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.api-error-title {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+  color: var(--api-error-title);
+}
+
+.api-error-type {
+  font-weight: normal;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.api-error-message {
+  margin: 0 0 0.4rem;
+  color: var(--api-error-text);
+  font-size: 0.95rem;
+}
+
+.api-error-hint {
+  margin: 0 0 1rem;
+  color: var(--api-error-hint);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Retry button — keyboard accessible, meets WCAG AA contrast */
+.api-retry-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ifm-color-primary);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.api-retry-button:hover,
+.api-retry-button:focus-visible {
+  background: var(--ifm-color-primary-dark);
+  outline: 3px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}
+
+.api-retry-button:active {
+  transform: scale(0.97);
+}
+
+/* ─── Wrapper ─────────────────────────────────────────────────────────────── */
+.api-reference-wrapper {
+  position: relative;
+  min-height: 60vh;
+}
+
+/* ─── Code block copy button ─────────────────────────────────────────────── */
 div.codeBlockContainer_node_modules-\@docusaurus-theme-classic-src-theme-CodeBlock-styles-module:hover .copyButton_node_modules-\@docusaurus-theme-classic-src-theme-CodeBlock-styles-module {
   opacity: 1;
 }
@@ -17,12 +176,11 @@ button.copyButton_node_modules-\@docusaurus-theme-classic-src-theme-CodeBlock-st
   transition: opacity 0.2s ease-in-out;
 }
 
-/* Redoc code sample copy button */
+/* Redoc copy icon */
 .redoc-wrap .copy-icon-svg {
   fill: var(--ifm-color-primary);
 }
 
-/* Ensure code blocks have visible copy buttons */
 pre code {
   position: relative;
 }
