@@ -6,6 +6,12 @@
   --ifm-color-primary-light: #33925e;
   --ifm-color-primary-lighter: #359962;
   --ifm-color-primary-lightest: #3cad6e;
+
+  /* Task 3 — snappier page navigation. Override Docusaurus defaults
+     so hover/focus transitions are < 200ms and feel instant. */
+  --ifm-transition-fast: 100ms;
+  --ifm-transition-slow: 150ms;
+  --ifm-transition-duration-default: 150ms;
 }
 
 /* ============================================================
@@ -104,5 +110,41 @@ pre code {
 
   .api-reference-shell .redoc-wrap > div > div:first-child::-webkit-scrollbar {
     width: 8px;
+  }
+}
+
+/* ============================================================
+   Task 3 — Snappy page transitions & no-jank navigation
+   ============================================================ */
+/* Reduce the Enter/Leave animation duration on the main content wrapper
+   so route swaps feel < 200ms and there is less layout jank. */
+.main-wrapper {
+  animation-duration: 120ms !important;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Make navbar hover/focus transitions noticeably quicker. */
+.navbar__link,
+.navbar__item {
+  transition: background-color 80ms linear, color 80ms linear;
+}
+
+/* Prompt the compositor to prepare an opacity layer for the page
+   transition, which keeps route swaps smooth. Avoid persistent
+   `transform: translateZ(0)` here as it would force a permanent GPU
+   layer and increase memory pressure. */
+article {
+  will-change: opacity;
+}
+
+/* Honor user motion preference: drop animation entirely so navigating
+   between pages never produces a flash of motion. */
+@media (prefers-reduced-motion: reduce) {
+  .main-wrapper,
+  .navbar__link,
+  .navbar__item {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
   }
 }

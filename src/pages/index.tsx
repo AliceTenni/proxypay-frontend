@@ -12,7 +12,9 @@ export default function Home(): React.JSX.Element {
           canonical <code>openapi.yaml</code> in this repository.
         </p>
         <p>
-          <Link className="button button--primary button--lg" to="/api">
+          {/* prefetch warms up the route chunk on hover/visible so the
+              navigation to /api feels instant. */}
+          <Link className="button button--primary button--lg" to="/api" prefetch>
             Open API Reference
           </Link>
         </p>
