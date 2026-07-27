@@ -8,7 +8,9 @@
   --ifm-color-primary-lightest: #3cad6e;
 }
 
-/* Code block copy button styling */
+/* ============================================================
+   Code block copy button styling
+   ============================================================ */
 div.codeBlockContainer_node_modules-\@docusaurus-theme-classic-src-theme-CodeBlock-styles-module:hover .copyButton_node_modules-\@docusaurus-theme-classic-src-theme-CodeBlock-styles-module {
   opacity: 1;
 }
@@ -22,7 +24,85 @@ button.copyButton_node_modules-\@docusaurus-theme-classic-src-theme-CodeBlock-st
   fill: var(--ifm-color-primary);
 }
 
-/* Ensure code blocks have visible copy buttons */
 pre code {
   position: relative;
+}
+
+/* ============================================================
+   API Reference sidebar — Task 1: full-height scroll + clear scroll
+   indicators + mobile-collapsible section.
+   Scoped to the outer sidebar column so we don't accidentally restyle
+   Redoc's inner menu-content nodes (each tag's operations list uses
+   that same class internally).
+   ============================================================ */
+
+.api-reference-shell {
+  width: 100%;
+}
+
+/* The Redoc sidebar is the first column inside .redoc-wrap. */
+.api-reference-shell .redoc-wrap > div > div:first-child {
+  max-height: calc(100vh - var(--ifm-navbar-height, 60px));
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  position: relative;
+}
+
+/* Always-visible custom scrollbar — heuristic scroll indicator that
+   there is more content. */
+.api-reference-shell .redoc-wrap > div > div:first-child::-webkit-scrollbar {
+  width: 10px;
+}
+.api-reference-shell .redoc-wrap > div > div:first-child::-webkit-scrollbar-track {
+  background: var(--ifm-color-emphasis-100);
+}
+.api-reference-shell .redoc-wrap > div > div:first-child::-webkit-scrollbar-thumb {
+  background: var(--ifm-color-emphasis-400);
+  border-radius: 5px;
+  border: 2px solid var(--ifm-color-emphasis-100);
+  transition: background-color 0.2s ease;
+}
+.api-reference-shell .redoc-wrap > div > div:first-child::-webkit-scrollbar-thumb:hover {
+  background: var(--ifm-color-emphasis-700);
+}
+
+/* Sticky pseudo-element fades at the top/bottom of the sidebar column.
+   Because the column has overflow-y: auto, these ::before/::after
+   elements scroll WITH the content, so the visible edges of the scroll
+   viewport always show a fade whenever there's offscreen content. */
+.api-reference-shell .redoc-wrap > div > div:first-child::before,
+.api-reference-shell .redoc-wrap > div > div:first-child::after {
+  content: '';
+  position: sticky;
+  left: 0;
+  right: 0;
+  height: 28px;
+  pointer-events: none;
+  z-index: 2;
+  display: block;
+}
+.api-reference-shell .redoc-wrap > div > div:first-child::before {
+  top: 0;
+  margin-bottom: -28px;
+  background: linear-gradient(to bottom, var(--ifm-background-color), transparent);
+}
+.api-reference-shell .redoc-wrap > div > div:first-child::after {
+  bottom: 0;
+  margin-top: -28px;
+  background: linear-gradient(to top, var(--ifm-background-color), transparent);
+}
+
+/* Mobile: collapse-friendly capped section so the rest of the doc stays
+   visible. Border-bottom + capped height makes the section's boundaries
+   explicit and tap targets remain accessible. */
+@media (max-width: 768px) {
+  .api-reference-shell .redoc-wrap > div > div:first-child {
+    max-height: 60vh;
+    border-bottom: 1px solid var(--ifm-color-emphasis-200);
+    margin-bottom: 0.5rem;
+  }
+
+  .api-reference-shell .redoc-wrap > div > div:first-child::-webkit-scrollbar {
+    width: 8px;
+  }
 }
