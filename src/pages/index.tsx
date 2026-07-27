@@ -12,8 +12,11 @@ export default function Home(): React.JSX.Element {
           canonical <code>openapi.yaml</code> in this repository.
         </p>
         <p>
-          <Link className="button button--primary button--lg" to="/api">
+          <Link className="button button--primary button--lg" to="/api" style={{ marginRight: 12 }}>
             Open API Reference
+          </Link>
+          <Link className="button button--secondary button--lg" to="/sdk-guides">
+            SDK Guides
           </Link>
         </p>
       </main>
