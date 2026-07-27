@@ -148,3 +148,57 @@ article {
     transition-duration: 0ms !important;
   }
 }
+
+/* ============================================================
+   Task 4 — Code validation visual indicators
+   ============================================================ */
+/* The badge is absolutely positioned over the top-right of the
+   <pre> element. Wrapping the icon in a span keeps screen readers
+   from reading the glyph literally — we set aria-label above. */
+.code-status {
+  position: absolute;
+  top: 8px;
+  right: 48px; /* leave room for Redoc's copy button */
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  z-index: 4;
+  cursor: help;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease;
+  user-select: none;
+}
+.code-status:hover {
+  transform: scale(1.15);
+}
+
+.code-status--valid {
+  background-color: #2ecc71;
+  color: #ffffff;
+}
+.code-status--valid::after {
+  content: '\2713'; /* ✓ */
+}
+
+.code-status--warning {
+  background-color: #f39c12;
+  color: #ffffff;
+}
+.code-status--warning::after {
+  content: '\26A0'; /* ⚠ */
+}
+
+/* Make sure the badge is readable in both themes by tagging explicit
+   text/icon contrast. */
+html[data-theme='dark'] .code-status--valid {
+  background-color: #27ae60;
+}
+html[data-theme='dark'] .code-status--warning {
+  background-color: #e67e22;
+}

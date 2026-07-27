@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { RedocStandalone } from 'redoc';
+import { attachValidationObserver } from '../utils/codeValidator';
 
 declare global {
   // Inlined by webpack.DefinePlugin in docusaurus.config.ts so the value
@@ -10,6 +11,40 @@ declare global {
 }
 
 const SPEC_VERSION: string = __OPENAPI_VERSION__ || 'dev';
+
+// Component that mounts the code-validation MutationObserver once Redoc
+// has rendered its code samples. Returns null — purely a side-effect
+// mount.
+function CodeValidationMount(): null {
+  useEffect(() => {
+    // Redoc renders asynchronously after hydration. Wait for the wrap
+    // element to appear, then attach the observer to it so we don't
+    // pick up unrelated <pre> nodes from other parts of the page.
+    let detach: (() => void) | null = null;
+    let cancelled = false;
+
+    const tryAttach = (): void => {
+      if (cancelled) return;
+      const wrap = document.querySelector('.redoc-wrap') as HTMLElement | null;
+      if (!wrap) {
+        // Schedule a brief retry — Redoc's render is microtask-deferred
+        const id = window.setTimeout(tryAttach, 80);
+        if (cancelled) window.clearTimeout(id);
+        return;
+      }
+      detach = attachValidationObserver(wrap);
+    };
+
+    tryAttach();
+
+    return () => {
+      cancelled = true;
+      if (detach) detach();
+    };
+  }, []);
+
+  return null;
+}
 
 export default function ApiReference(): React.JSX.Element {
   return (
@@ -24,6 +59,7 @@ export default function ApiReference(): React.JSX.Element {
           sortPropsAlphabetically: true,
         }}
       />
+      <CodeValidationMount />
     </div>
   );
 }
