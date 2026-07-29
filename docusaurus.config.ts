@@ -46,9 +46,12 @@ const config: Config = {
         { to: '/api', label: 'Reference', position: 'left' },
         { to: '/rate-limits', label: 'Rate Limits', position: 'left' },
         {
+          // #231: external link — open in new tab
           href: 'https://github.com/sublime247/proxypay',
           label: 'GitHub',
           position: 'right',
+          target: '_blank',
+          rel: 'noopener noreferrer',
         },
       ],
     },
@@ -57,7 +60,10 @@ const config: Config = {
       links: [
         {
           title: 'Docs',
-          items: [{ label: 'API Reference', to: '/api' }],
+          items: [
+            // Internal link — opens in same tab (no target override)
+            { label: 'API Reference', to: '/api' },
+          ],
         },
       ],
       copyright: `Copyright © ${new Date().getFullYear()} ProxyPay`,
