@@ -2851,3 +2851,172 @@ a[target='_blank']::after {
 [data-theme='dark'] .spec-conflicts {
   background: #2d2410;
 }
+
+/* ============================================================
+   API Reference sidebar — Task 1: full-height scroll + clear scroll
+   indicators + mobile-collapsible section.
+   Scoped to the outer sidebar column so we don't accidentally restyle
+   Redoc's inner menu-content nodes (each tag's operations list uses
+   that same class internally).
+   ============================================================ */
+
+.api-reference-shell {
+  width: 100%;
+}
+
+/* The Redoc sidebar is the first column inside .redoc-wrap. */
+.api-reference-shell .redoc-wrap > div > div:first-child {
+  max-height: calc(100vh - var(--ifm-navbar-height, 60px));
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  position: relative;
+}
+
+/* Always-visible custom scrollbar — heuristic scroll indicator that
+   there is more content. */
+.api-reference-shell .redoc-wrap > div > div:first-child::-webkit-scrollbar {
+  width: 10px;
+}
+.api-reference-shell .redoc-wrap > div > div:first-child::-webkit-scrollbar-track {
+  background: var(--ifm-color-emphasis-100);
+}
+.api-reference-shell .redoc-wrap > div > div:first-child::-webkit-scrollbar-thumb {
+  background: var(--ifm-color-emphasis-400);
+  border-radius: 5px;
+  border: 2px solid var(--ifm-color-emphasis-100);
+  transition: background-color 0.2s ease;
+}
+.api-reference-shell .redoc-wrap > div > div:first-child::-webkit-scrollbar-thumb:hover {
+  background: var(--ifm-color-emphasis-700);
+}
+
+/* Sticky pseudo-element fades at the top/bottom of the sidebar column.
+   Because the column has overflow-y: auto, these ::before/::after
+   elements scroll WITH the content, so the visible edges of the scroll
+   viewport always show a fade whenever there's offscreen content. */
+.api-reference-shell .redoc-wrap > div > div:first-child::before,
+.api-reference-shell .redoc-wrap > div > div:first-child::after {
+  content: '';
+  position: sticky;
+  left: 0;
+  right: 0;
+  height: 28px;
+  pointer-events: none;
+  z-index: 2;
+  display: block;
+}
+.api-reference-shell .redoc-wrap > div > div:first-child::before {
+  top: 0;
+  margin-bottom: -28px;
+  background: linear-gradient(to bottom, var(--ifm-background-color), transparent);
+}
+.api-reference-shell .redoc-wrap > div > div:first-child::after {
+  bottom: 0;
+  margin-top: -28px;
+  background: linear-gradient(to top, var(--ifm-background-color), transparent);
+}
+
+/* Mobile: collapse-friendly capped section so the rest of the doc stays
+   visible. Border-bottom + capped height makes the section's boundaries
+   explicit and tap targets remain accessible. */
+@media (max-width: 768px) {
+  .api-reference-shell .redoc-wrap > div > div:first-child {
+    max-height: 60vh;
+    border-bottom: 1px solid var(--ifm-color-emphasis-200);
+    margin-bottom: 0.5rem;
+  }
+
+  .api-reference-shell .redoc-wrap > div > div:first-child::-webkit-scrollbar {
+    width: 8px;
+  }
+}
+
+/* ============================================================
+   Task 3 — Snappy page transitions & no-jank navigation
+   ============================================================ */
+/* Reduce the Enter/Leave animation duration on the main content wrapper
+   so route swaps feel < 200ms and there is less layout jank. */
+.main-wrapper {
+  animation-duration: 120ms !important;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Make navbar hover/focus transitions noticeably quicker. */
+.navbar__link,
+.navbar__item {
+  transition: background-color 80ms linear, color 80ms linear;
+}
+
+/* Prompt the compositor to prepare an opacity layer for the page
+   transition, which keeps route swaps smooth. Avoid persistent
+   `transform: translateZ(0)` here as it would force a permanent GPU
+   layer and increase memory pressure. */
+article {
+  will-change: opacity;
+}
+
+/* Honor user motion preference: drop animation entirely so navigating
+   between pages never produces a flash of motion. */
+@media (prefers-reduced-motion: reduce) {
+  .main-wrapper,
+  .navbar__link,
+  .navbar__item {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+  }
+}
+
+/* ============================================================
+   Task 4 — Code validation visual indicators
+   ============================================================ */
+/* The badge is absolutely positioned over the top-right of the
+   <pre> element. Wrapping the icon in a span keeps screen readers
+   from reading the glyph literally — we set aria-label above. */
+.code-status {
+  position: absolute;
+  top: 8px;
+  right: 48px; /* leave room for Redoc's copy button */
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  z-index: 4;
+  cursor: help;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease;
+  user-select: none;
+}
+.code-status:hover {
+  transform: scale(1.15);
+}
+
+.code-status--valid {
+  background-color: #2ecc71;
+  color: #ffffff;
+}
+.code-status--valid::after {
+  content: '\2713'; /* ✓ */
+}
+
+.code-status--warning {
+  background-color: #f39c12;
+  color: #ffffff;
+}
+.code-status--warning::after {
+  content: '\26A0'; /* ⚠ */
+}
+
+/* Make sure the badge is readable in both themes by tagging explicit
+   text/icon contrast. */
+html[data-theme='dark'] .code-status--valid {
+  background-color: #27ae60;
+}
+html[data-theme='dark'] .code-status--warning {
+  background-color: #e67e22;
+}
