@@ -464,6 +464,45 @@ function EndpointDetail({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+type RateLimit = {
+  per_minute?: number;
+  per_hour?: number;
+  concurrent?: number;
+  tiers?: Record<string, { per_minute?: number; per_hour?: number; concurrent?: number }>;
+  strict?: boolean;
+};
+
+const LANGS = [
+  'JavaScript',
+  'Python',
+  'Go',
+  'Java',
+  'Ruby',
+  'PHP',
+  'cURL',
+];
+
+function buildExample(lang: string, baseUrl: string, endpoint: string) {
+  const url = `${baseUrl}${endpoint}`;
+  switch (lang) {
+    case 'Python':
+      return `import requests\n\nurl = "${url}"\nheaders = {"Authorization": "Bearer {API_KEY}"}\nresp = requests.get(url, headers=headers)\nprint(resp.status_code, resp.text)`;
+    case 'JavaScript':
+      return `const fetch = require('node-fetch')\n\nconst url = '${url}'\nconst res = await fetch(url, { headers: { 'Authorization': 'Bearer {API_KEY}' } })\nconst body = await res.text()\nconsole.log(res.status, body)`;
+    case 'Go':
+      return `package main\n\nimport (\n  \"fmt\"\n  \"net/http\"\n)\n\nfunc main() {\n  req, _ := http.NewRequest(\"GET\", \"${url}\", nil)\n  req.Header.Set(\"Authorization\", \"Bearer {API_KEY}\")\n  resp, _ := http.DefaultClient.Do(req)\n  defer resp.Body.Close()\n  fmt.Println(resp.Status)\n}`;
+    case 'Java':
+      return `import java.net.*;\nimport java.io.*;\n\nclass Example {\n  public static void main(String[] args) throws Exception {\n    URL url = new URL(\"${url}\");\n    HttpURLConnection con = (HttpURLConnection) url.openConnection();\n    con.setRequestProperty(\"Authorization\", \"Bearer {API_KEY}\");\n    System.out.println(con.getResponseCode());\n  }\n}`;
+    case 'Ruby':
+      return `require 'net/http'\n\nuri = URI('${url}')\nreq = Net::HTTP::Get.new(uri)\nreq['Authorization'] = 'Bearer {API_KEY}'\nres = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme==\"https\") { |http| http.request(req) }\nputs res.code`;
+    case 'PHP':
+      return `<?php\n$ch = curl_init();\ncurl_setopt($ch, CURLOPT_URL, '${url}');\ncurl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer {API_KEY}']);\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\n$res = curl_exec($ch);\necho curl_getinfo($ch, CURLINFO_HTTP_CODE);\n?>`;
+    case 'cURL':
+    default:
+      return `curl -X GET '${url}' -H 'Authorization: Bearer {API_KEY}'`;
+  }
+}
+
 export default function ApiReference(): React.JSX.Element {
   const [spec, setSpec] = useState<Record<string, unknown> | null>(null);
   const [specVersion, setSpecVersion] = useState(0);
