@@ -1386,3 +1386,21 @@ a[target='_blank']::after {
     font-size: 1rem;
   }
 }
+
+/* SDK guides styling */
+.sdk-guides .sdk-card {
+  border: 1px solid rgba(46,133,85,0.12);
+  padding: 1rem;
+  border-radius: 8px;
+  background: #fff;
+}
+.sdk-guides pre {
+  background: #0f1720;
+  color: #e6eef3;
+  padding: 0.75rem;
+  border-radius: 6px;
+  overflow: auto;
+}
+.sdk-guides h2 {
+  margin-top: 1.5rem;
+}
