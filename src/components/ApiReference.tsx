@@ -1,5 +1,468 @@
-import React, {useEffect, useMemo, useState} from 'react';
-import { RedocStandalone } from 'redoc';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import jsYaml from 'js-yaml';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Endpoint {
+  id: string;
+  method: string;
+  path: string;
+  summary: string;
+  description?: string;
+  parameters?: Parameter[];
+  requestBody?: RequestBodySpec;
+  responses?: Record<string, ResponseSpec>;
+  tags?: string[];
+}
+
+interface Parameter {
+  name: string;
+  in: string;
+  required?: boolean;
+  description?: string;
+  schema?: { type?: string; example?: unknown };
+  example?: unknown;
+}
+
+interface RequestBodySpec {
+  description?: string;
+  required?: boolean;
+  content?: Record<string, { schema?: SchemaObject; example?: unknown }>;
+}
+
+interface ResponseSpec {
+  description?: string;
+  content?: Record<string, { schema?: SchemaObject; example?: unknown }>;
+}
+
+interface SchemaObject {
+  type?: string;
+  properties?: Record<string, SchemaObject>;
+  example?: unknown;
+}
+
+interface Template {
+  id: string;
+  name: string;
+  params: Record<string, string>;
+  body: string;
+  isCustom?: boolean;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 10;
+const DEBOUNCE_MS = 300;
+const METHOD_COLORS: Record<string, string> = {
+  get: '#61affe',
+  post: '#49cc90',
+  put: '#fca130',
+  patch: '#50e3c2',
+  delete: '#f93e3e',
+  options: '#0d5aa7',
+  head: '#9012fe',
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function extractEndpoints(spec: Record<string, unknown>): Endpoint[] {
+  const paths = (spec.paths ?? {}) as Record<string, Record<string, unknown>>;
+  const endpoints: Endpoint[] = [];
+  const methods = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'];
+
+  for (const [path, pathItem] of Object.entries(paths)) {
+    for (const method of methods) {
+      const op = pathItem[method] as Record<string, unknown> | undefined;
+      if (!op) continue;
+      endpoints.push({
+        id: `${method}:${path}`,
+        method,
+        path,
+        summary: (op.summary as string) ?? `${method.toUpperCase()} ${path}`,
+        description: op.description as string | undefined,
+        parameters: op.parameters as Parameter[] | undefined,
+        requestBody: op.requestBody as RequestBodySpec | undefined,
+        responses: op.responses as Record<string, ResponseSpec> | undefined,
+        tags: op.tags as string[] | undefined,
+      });
+    }
+  }
+  return endpoints;
+}
+
+function buildDefaultTemplates(ep: Endpoint): Template[] {
+  const templates: Template[] = [];
+
+  const defaultParams: Record<string, string> = {};
+  for (const p of ep.parameters ?? []) {
+    const ex = p.example ?? p.schema?.example;
+    defaultParams[p.name] = ex !== undefined ? String(ex) : '';
+  }
+
+  // Template 1 — minimal (required params only)
+  const minimalParams: Record<string, string> = {};
+  for (const p of ep.parameters ?? []) {
+    if (p.required) {
+      const ex = p.example ?? p.schema?.example;
+      minimalParams[p.name] = ex !== undefined ? String(ex) : '';
+    }
+  }
+  templates.push({
+    id: 'minimal',
+    name: 'Minimal (required only)',
+    params: minimalParams,
+    body: buildDefaultBody(ep, 'minimal'),
+  });
+
+  // Template 2 — full example
+  templates.push({
+    id: 'full',
+    name: 'Full example',
+    params: defaultParams,
+    body: buildDefaultBody(ep, 'full'),
+  });
+
+  // Template 3 — empty (blank slate)
+  const emptyParams: Record<string, string> = {};
+  for (const p of ep.parameters ?? []) emptyParams[p.name] = '';
+  templates.push({
+    id: 'empty',
+    name: 'Empty (blank slate)',
+    params: emptyParams,
+    body: '',
+  });
+
+  return templates;
+}
+
+function buildDefaultBody(ep: Endpoint, variant: 'minimal' | 'full'): string {
+  const content = ep.requestBody?.content;
+  if (!content) return '';
+  const mediaType = Object.values(content)[0];
+  if (!mediaType) return '';
+
+  if (mediaType.example) return JSON.stringify(mediaType.example, null, 2);
+
+  const schema = mediaType.schema;
+  if (!schema?.properties) return '';
+
+  const obj: Record<string, unknown> = {};
+  for (const [key, prop] of Object.entries(schema.properties)) {
+    if (variant === 'minimal' && ep.requestBody?.required === false) continue;
+    obj[key] = prop.example ?? (prop.type === 'string' ? '' : prop.type === 'number' ? 0 : null);
+  }
+  return JSON.stringify(obj, null, 2);
+}
+
+function matchesSearch(ep: Endpoint, query: string): boolean {
+  const q = query.toLowerCase();
+  return (
+    ep.path.toLowerCase().includes(q) ||
+    ep.method.toLowerCase().includes(q) ||
+    ep.summary.toLowerCase().includes(q) ||
+    (ep.description?.toLowerCase().includes(q) ?? false) ||
+    (ep.tags?.some((t) => t.toLowerCase().includes(q)) ?? false)
+  );
+}
+
+// ─── Hooks ────────────────────────────────────────────────────────────────────
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
+function useSwipe(
+  onSwipeLeft: () => void,
+  onSwipeRight: () => void,
+  sensitivity = 50,
+) {
+  const startX = useRef<number | null>(null);
+  const startY = useRef<number | null>(null);
+  const [swiping, setSwiping] = useState<'left' | 'right' | null>(null);
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+  }, []);
+
+  const onTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (startX.current === null || startY.current === null) return;
+      const dx = e.changedTouches[0].clientX - startX.current;
+      const dy = e.changedTouches[0].clientY - startY.current;
+      // Only treat as horizontal swipe if horizontal movement dominates
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) >= sensitivity) {
+        const dir = dx < 0 ? 'left' : 'right';
+        setSwiping(dir);
+        setTimeout(() => setSwiping(null), 300);
+        if (dir === 'left') onSwipeLeft();
+        else onSwipeRight();
+      }
+      startX.current = null;
+      startY.current = null;
+    },
+    [onSwipeLeft, onSwipeRight, sensitivity],
+  );
+
+  return { onTouchStart, onTouchEnd, swiping };
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function MethodBadge({ method }: { method: string }) {
+  return (
+    <span
+      className="api-method-badge"
+      style={{ backgroundColor: METHOD_COLORS[method] ?? '#999' }}
+    >
+      {method.toUpperCase()}
+    </span>
+  );
+}
+
+function Pagination({
+  page,
+  totalPages,
+  onPrev,
+  onNext,
+  onPage,
+}: {
+  page: number;
+  totalPages: number;
+  onPrev: () => void;
+  onNext: () => void;
+  onPage: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+
+  // Build page window: always show first, last, current ±1
+  const pages = new Set([1, totalPages, page, page - 1, page + 1].filter((p) => p >= 1 && p <= totalPages));
+  const sorted = Array.from(pages).sort((a, b) => a - b);
+
+  return (
+    <div className="api-pagination">
+      <button onClick={onPrev} disabled={page === 1} aria-label="Previous page">
+        ‹
+      </button>
+      {sorted.map((p, i) => {
+        const prev = sorted[i - 1];
+        return (
+          <React.Fragment key={p}>
+            {prev && p - prev > 1 && <span className="api-pagination-ellipsis">…</span>}
+            <button
+              onClick={() => onPage(p)}
+              className={p === page ? 'active' : ''}
+              aria-current={p === page ? 'page' : undefined}
+            >
+              {p}
+            </button>
+          </React.Fragment>
+        );
+      })}
+      <button onClick={onNext} disabled={page === totalPages} aria-label="Next page">
+        ›
+      </button>
+    </div>
+  );
+}
+
+function RequestTemplates({
+  endpoint,
+  customTemplates,
+  onSaveCustom,
+}: {
+  endpoint: Endpoint;
+  customTemplates: Record<string, Template[]>;
+  onSaveCustom: (endpointId: string, tpl: Template) => void;
+}) {
+  const builtIn = useMemo(() => buildDefaultTemplates(endpoint), [endpoint]);
+  const custom = customTemplates[endpoint.id] ?? [];
+  const allTemplates = [...builtIn, ...custom];
+
+  const [selectedId, setSelectedId] = useState(builtIn[0]?.id ?? '');
+  const [params, setParams] = useState<Record<string, string>>(builtIn[0]?.params ?? {});
+  const [body, setBody] = useState(builtIn[0]?.body ?? '');
+  const [saveName, setSaveName] = useState('');
+  const [showSave, setShowSave] = useState(false);
+
+  const selected = allTemplates.find((t) => t.id === selectedId);
+
+  function applyTemplate(tpl: Template) {
+    setSelectedId(tpl.id);
+    setParams({ ...tpl.params });
+    setBody(tpl.body);
+  }
+
+  function handleSave() {
+    if (!saveName.trim()) return;
+    const tpl: Template = {
+      id: `custom-${Date.now()}`,
+      name: saveName.trim(),
+      params: { ...params },
+      body,
+      isCustom: true,
+    };
+    onSaveCustom(endpoint.id, tpl);
+    setSaveName('');
+    setShowSave(false);
+  }
+
+  const hasParams = (endpoint.parameters?.length ?? 0) > 0;
+  const hasBody = !!endpoint.requestBody;
+
+  return (
+    <div className="api-templates">
+      <div className="api-templates-header">
+        <span>Request Templates</span>
+        <select
+          value={selectedId}
+          onChange={(e) => {
+            const tpl = allTemplates.find((t) => t.id === e.target.value);
+            if (tpl) applyTemplate(tpl);
+          }}
+        >
+          {allTemplates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.isCustom ? `★ ${t.name}` : t.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {hasParams && (
+        <div className="api-templates-params">
+          {endpoint.parameters?.map((p) => (
+            <label key={p.name} className="api-param-row">
+              <span className="api-param-name">
+                {p.name}
+                {p.required && <sup>*</sup>}
+                <small> ({p.in})</small>
+              </span>
+              <input
+                type="text"
+                value={params[p.name] ?? ''}
+                placeholder={p.description ?? p.name}
+                onChange={(e) => setParams((prev) => ({ ...prev, [p.name]: e.target.value }))}
+              />
+            </label>
+          ))}
+        </div>
+      )}
+
+      {hasBody && (
+        <div className="api-templates-body">
+          <label>Request Body</label>
+          <textarea
+            rows={6}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder='{"key": "value"}'
+          />
+        </div>
+      )}
+
+      <div className="api-templates-actions">
+        <button onClick={() => setShowSave((v) => !v)}>Save as template</button>
+        {showSave && (
+          <>
+            <input
+              type="text"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder="Template name"
+            />
+            <button onClick={handleSave} disabled={!saveName.trim()}>
+              Save
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EndpointDetail({
+  endpoint,
+  customTemplates,
+  onSaveCustom,
+  onPrev,
+  onNext,
+  hasPrev,
+  hasNext,
+}: {
+  endpoint: Endpoint;
+  customTemplates: Record<string, Template[]>;
+  onSaveCustom: (id: string, tpl: Template) => void;
+  onPrev: () => void;
+  onNext: () => void;
+  hasPrev: boolean;
+  hasNext: boolean;
+}) {
+  const { onTouchStart, onTouchEnd, swiping } = useSwipe(onNext, onPrev);
+
+  return (
+    <div
+      className={`api-endpoint-detail${swiping ? ` swipe-${swiping}` : ''}`}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
+      <div className="api-endpoint-detail-header">
+        <MethodBadge method={endpoint.method} />
+        <code className="api-endpoint-path">{endpoint.path}</code>
+        <div className="api-endpoint-nav">
+          <button onClick={onPrev} disabled={!hasPrev} aria-label="Previous endpoint">
+            ← Prev
+          </button>
+          <button onClick={onNext} disabled={!hasNext} aria-label="Next endpoint">
+            Next →
+          </button>
+        </div>
+      </div>
+
+      <h2>{endpoint.summary}</h2>
+      {endpoint.description && <p className="api-endpoint-desc">{endpoint.description}</p>}
+
+      {endpoint.tags && endpoint.tags.length > 0 && (
+        <div className="api-endpoint-tags">
+          {endpoint.tags.map((t) => (
+            <span key={t} className="api-tag">{t}</span>
+          ))}
+        </div>
+      )}
+
+      <RequestTemplates
+        endpoint={endpoint}
+        customTemplates={customTemplates}
+        onSaveCustom={onSaveCustom}
+      />
+
+      {endpoint.responses && (
+        <div className="api-responses">
+          <h3>Responses</h3>
+          {Object.entries(endpoint.responses).map(([code, res]) => (
+            <div key={code} className="api-response-row">
+              <span className={`api-status-code status-${code[0]}xx`}>{code}</span>
+              <span>{res.description}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 type RateLimit = {
   per_minute?: number;
@@ -41,161 +504,162 @@ function buildExample(lang: string, baseUrl: string, endpoint: string) {
 }
 
 export default function ApiReference(): React.JSX.Element {
-  const [specPaths, setSpecPaths] = useState<string[]>([]);
-  const [selectedPath, setSelectedPath] = useState<string>('/');
-  const [rateLimit, setRateLimit] = useState<RateLimit | null>(null);
-  const [desiredPerMinute, setDesiredPerMinute] = useState<number>(60);
-  const [batchSize, setBatchSize] = useState<number>(1);
-  const [lang, setLang] = useState<string>(() => {
-    try { return localStorage.getItem('pp_lang_pref') || LANGS[0]; } catch { return LANGS[0]; }
-  });
+  const [spec, setSpec] = useState<Record<string, unknown> | null>(null);
+  const [specVersion, setSpecVersion] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [customTemplates, setCustomTemplates] = useState<Record<string, Template[]>>({});
 
-  useEffect(() => { localStorage.setItem('pp_lang_pref', lang); }, [lang]);
+  // Search cache: key = `${specVersion}:${query}` → Endpoint[]
+  const searchCache = useRef<Map<string, Endpoint[]>>(new Map());
 
+  // Fetch + parse spec; bump specVersion to invalidate cache
   useEffect(() => {
-    // Fetch and minimal-parse openapi.yaml to extract paths and optional x-rate-limit extensions.
     fetch('/openapi.yaml')
-      .then(r => r.text())
-      .then(text => {
-        const lines = text.split(/\r?\n/);
-        const paths: string[] = [];
-        let currentPath: string | null = null;
-        const limitsForPath: Record<string, RateLimit> = {};
-        for (let i = 0; i < lines.length; i++) {
-          const ln = lines[i].trimEnd();
-          const m = ln.match(/^\s*\/\S.*:$/);
-          if (m) {
-            currentPath = ln.trim().replace(/:$/, '');
-            paths.push(currentPath);
-            continue;
-          }
-          if (currentPath) {
-            const trim = ln.trim();
-            // Look for extension keys like x-rate-limit, x-rate-limits, x-limit
-            if (/^x[-_]rate[-_]limit/i.test(trim) || /^x[-_]limits/i.test(trim) || /^x[-_]ratelimit/i.test(trim)) {
-              // very small parse: look forward a few lines for numeric keys
-              const rl: RateLimit = {};
-              for (let j = i+1; j < Math.min(i+8, lines.length); j++) {
-                const t = lines[j].trim();
-                const m2 = t.match(/per[_- ]?minute:\s*(\d+)/i) || t.match(/requests[_- ]?per[_- ]?minute:\s*(\d+)/i) || t.match(/minute:\s*(\d+)/i);
-                if (m2) rl.per_minute = Number(m2[1]);
-                const m3 = t.match(/per[_- ]?hour:\s*(\d+)/i) || t.match(/hour:\s*(\d+)/i);
-                if (m3) rl.per_hour = Number(m3[1]);
-                const m4 = t.match(/concurrent:\s*(\d+)/i) || t.match(/concurrency:\s*(\d+)/i);
-                if (m4) rl.concurrent = Number(m4[1]);
-                if (/strict:\s*(true|yes|1)/i.test(t)) rl.strict = true;
-              }
-              limitsForPath[currentPath] = rl;
-            }
-          }
-        }
-        setSpecPaths(paths.length ? paths : ['/']);
-        if (paths.length) {
-          setSelectedPath(paths[0]);
-          if (limitsForPath[paths[0]]) setRateLimit(limitsForPath[paths[0]]);
-          else setRateLimit(null);
-        }
+      .then((r) => r.text())
+      .then((text) => {
+        const parsed = jsYaml.load(text) as Record<string, unknown>;
+        setSpec(parsed);
+        setSpecVersion((v) => v + 1);
+        searchCache.current.clear();
       })
-      .catch(() => { setSpecPaths(['/']); setRateLimit(null); });
+      .catch((e) => setError(String(e)));
   }, []);
 
+  const allEndpoints = useMemo(() => (spec ? extractEndpoints(spec) : []), [spec]);
+
+  const debouncedQuery = useDebounce(query, DEBOUNCE_MS);
+
+  // Filtered endpoints with caching
+  const filtered = useMemo(() => {
+    const cacheKey = `${specVersion}:${debouncedQuery}`;
+    if (searchCache.current.has(cacheKey)) {
+      return searchCache.current.get(cacheKey)!;
+    }
+    const result = debouncedQuery.trim()
+      ? allEndpoints.filter((ep) => matchesSearch(ep, debouncedQuery))
+      : allEndpoints;
+    searchCache.current.set(cacheKey, result);
+    return result;
+  }, [allEndpoints, debouncedQuery, specVersion]);
+
+  // Reset to page 1 when filter changes
   useEffect(() => {
-    // Attempt to re-parse openapi.yaml to get rate limits for the selected path
-    if (!selectedPath) return;
-    fetch('/openapi.yaml')
-      .then(r => r.text())
-      .then(text => {
-        const chunk = text.split(selectedPath)[1] || '';
-        const rl: RateLimit = {};
-        const lines = chunk.split(/\r?\n/).slice(0, 20);
-        for (const ln of lines) {
-          const t = ln.trim();
-          const m2 = t.match(/per[_- ]?minute:\s*(\d+)/i) || t.match(/requests[_- ]?per[_- ]?minute:\s*(\d+)/i) || t.match(/minute:\s*(\d+)/i);
-          if (m2) rl.per_minute = Number(m2[1]);
-          const m3 = t.match(/per[_- ]?hour:\s*(\d+)/i) || t.match(/hour:\s*(\d+)/i);
-          if (m3) rl.per_hour = Number(m3[1]);
-          const m4 = t.match(/concurrent:\s*(\d+)/i) || t.match(/concurrency:\s*(\d+)/i);
-          if (m4) rl.concurrent = Number(m4[1]);
-          if (/strict:\s*(true|yes|1)/i.test(t)) rl.strict = true;
-        }
-        setRateLimit(Object.keys(rl).length ? rl : null);
-      })
-      .catch(() => setRateLimit(null));
-  }, [selectedPath]);
+    setPage(1);
+    setSelectedId(null);
+  }, [debouncedQuery]);
 
-  const baseUrl = useMemo(() => {
-    // Use window origin as base URL for examples (placeholder)
-    try { return window.location.origin; } catch { return 'https://api.example.com'; }
-  }, []);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
-  const perSecond = useMemo(() => (desiredPerMinute / 60), [desiredPerMinute]);
-  const feasible = useMemo(() => {
-    if (!rateLimit || !rateLimit.per_minute) return true; // unknown => assume ok
-    return desiredPerMinute <= rateLimit.per_minute;
-  }, [desiredPerMinute, rateLimit]);
+  // Clamp page to valid range
+  const safePage = Math.min(page, totalPages);
+
+  // Correct slice: (page-1)*PAGE_SIZE … page*PAGE_SIZE (no off-by-one)
+  const pageEndpoints = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, safePage]);
+
+  const selectedIndex = selectedId ? filtered.findIndex((e) => e.id === selectedId) : -1;
+  const selectedEndpoint = selectedIndex >= 0 ? filtered[selectedIndex] : null;
+
+  function selectEndpoint(ep: Endpoint) {
+    setSelectedId(ep.id);
+    // Navigate to the correct page for this endpoint
+    const idx = filtered.findIndex((e) => e.id === ep.id);
+    if (idx >= 0) setPage(Math.floor(idx / PAGE_SIZE) + 1);
+  }
+
+  function navigateEndpoint(delta: number) {
+    if (selectedIndex < 0) return;
+    const next = filtered[selectedIndex + delta];
+    if (!next) return;
+    selectEndpoint(next);
+  }
+
+  function saveCustomTemplate(endpointId: string, tpl: Template) {
+    setCustomTemplates((prev) => ({
+      ...prev,
+      [endpointId]: [...(prev[endpointId] ?? []), tpl],
+    }));
+  }
+
+  if (error) return <div className="api-error">Failed to load spec: {error}</div>;
+  if (!spec) return <div className="api-loading">Loading API reference…</div>;
 
   return (
-    <div style={{ position: 'relative' }}>
-      <RedocStandalone
-        specUrl="/openapi.yaml"
-        options={{
-          hideHostname: false,
-          disableSearch: false,
-          expandResponses: '200,201',
-          requiredPropsFirst: true,
-          sortPropsAlphabetically: true,
-        }}
-      />
+    <div className="api-reference">
+      {/* Search */}
+      <div className="api-search-bar">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search endpoints…"
+          aria-label="Search endpoints"
+        />
+        <span className="api-search-count">
+          {filtered.length} / {allEndpoints.length} endpoints
+        </span>
+      </div>
 
-      <aside className="pp-rate-widget" aria-live="polite">
-        <h4>Endpoint Rate Limits</h4>
-        <label>Endpoint</label>
-        <select value={selectedPath} onChange={e => setSelectedPath(e.target.value)}>
-          {specPaths.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-
-        <div className="pp-rate-details">
-          <strong>Limits</strong>
-          {rateLimit ? (
-            <ul>
-              <li>Requests / minute: {rateLimit.per_minute ?? '—'}</li>
-              <li>Requests / hour: {rateLimit.per_hour ?? '—'}</li>
-              <li>Concurrent: {rateLimit.concurrent ?? '—'}</li>
-            </ul>
+      <div className="api-layout">
+        {/* Endpoint list + pagination */}
+        <nav className="api-endpoint-list">
+          {pageEndpoints.length === 0 ? (
+            <p className="api-no-results">No endpoints match your search.</p>
           ) : (
-            <div className="pp-muted">No explicit limits found; using global defaults.</div>
+            pageEndpoints.map((ep) => (
+              <button
+                key={ep.id}
+                className={`api-endpoint-item${selectedId === ep.id ? ' selected' : ''}`}
+                onClick={() => selectEndpoint(ep)}
+              >
+                <MethodBadge method={ep.method} />
+                <span className="api-endpoint-item-path">{ep.path}</span>
+              </button>
+            ))
           )}
-          {rateLimit?.strict && <div className="pp-alert">Strict limits applied to this endpoint</div>}
-        </div>
 
-        <div className="pp-calc">
-          <strong>Calculator</strong>
-          <label>Desired requests / minute</label>
-          <input type="number" value={desiredPerMinute} onChange={e => setDesiredPerMinute(Number(e.target.value || 0))} />
-          <label>Batch size per request</label>
-          <input type="number" value={batchSize} onChange={e => setBatchSize(Number(e.target.value || 1))} />
-          <div className="pp-calc-results">
-            <div>{desiredPerMinute} requests/min = {perSecond.toFixed(2)} req/sec</div>
-            <div>Effective items/sec = {(perSecond * batchSize).toFixed(2)}</div>
-            <div className={feasible ? 'pp-ok' : 'pp-notok'}>
-              {feasible ? 'Feasible within limits' : 'Not feasible: exceeds per-minute limit'}
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            onPrev={() => setPage((p) => Math.max(1, p - 1))}
+            onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onPage={setPage}
+          />
+
+          <p className="api-page-info">
+            Page {safePage} of {totalPages} · {filtered.length} endpoint{filtered.length !== 1 ? 's' : ''}
+          </p>
+        </nav>
+
+        {/* Detail panel */}
+        <main className="api-detail-panel">
+          {selectedEndpoint ? (
+            <EndpointDetail
+              endpoint={selectedEndpoint}
+              customTemplates={customTemplates}
+              onSaveCustom={saveCustomTemplate}
+              onPrev={() => navigateEndpoint(-1)}
+              onNext={() => navigateEndpoint(1)}
+              hasPrev={selectedIndex > 0}
+              hasNext={selectedIndex < filtered.length - 1}
+            />
+          ) : (
+            <div className="api-empty-state">
+              <p>Select an endpoint from the list to view details.</p>
+              {allEndpoints.length === 0 && (
+                <p className="api-hint">
+                  No endpoints found. Add paths to <code>static/openapi.yaml</code>.
+                </p>
+              )}
             </div>
-          </div>
-        </div>
-
-        <div className="pp-examples">
-          <strong>Code Examples</strong>
-          <div className="pp-lang-tabs">
-            {LANGS.map(l => (
-              <button key={l} className={l === lang ? 'active' : ''} onClick={() => setLang(l)}>{l}</button>
-            ))}
-          </div>
-          <div className="pp-code-block">
-            <pre>{buildExample(lang, baseUrl, selectedPath)}</pre>
-            <button className="pp-copy" onClick={() => navigator.clipboard.writeText(buildExample(lang, baseUrl, selectedPath))}>Copy</button>
-          </div>
-        </div>
-      </aside>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
