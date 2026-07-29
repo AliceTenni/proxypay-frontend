@@ -1,43 +1,39 @@
-# ─── Dependencies ────────────────────────────────────────────────────────────
+# ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
 
-# ─── Docusaurus generated files ──────────────────────────────────────────────
+# ── Docusaurus generated files ────────────────────────────────────────────────
 .docusaurus/
 build/
 
-# ─── OS / editor junk ────────────────────────────────────────────────────────
+# ── Test artifacts ────────────────────────────────────────────────────────────
+# Jest / Vitest snapshots
+**/__snapshots__/
+*.snap
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# ── OS / Editor artefacts ──────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-*.swp
-*.swo
 .idea/
 .vscode/
-*.sublime-workspace
-*.sublime-project
+*.swp
+*.swo
+*~
 
-# ─── Environment & secrets ───────────────────────────────────────────────────
+# ── Environment / secrets ──────────────────────────────────────────────────────
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
-# ─── Test artefacts ──────────────────────────────────────────────────────────
-coverage/
-__snapshots__/
-*.snap
-.nyc_output/
-test-results/
-playwright-report/
-cypress/screenshots/
-cypress/videos/
-
-# ─── Logs ────────────────────────────────────────────────────────────────────
+# ── Logs ──────────────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# ─── Misc build outputs ──────────────────────────────────────────────────────
-dist/
-.cache/
-.parcel-cache/
+# ── Misc ──────────────────────────────────────────────────────────────────────
 *.tsbuildinfo
+.cache/
