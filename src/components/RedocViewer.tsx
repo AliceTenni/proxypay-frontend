@@ -120,19 +120,56 @@ export default function RedocViewer({
   }, [specUrl, spec, onSpecLoaded, onError]);
 
   /**
-   * Handle deep-linking to specific sections
+   * Handle deep-linking to specific sections.
+   *
+   * Fix #228: Redoc renders section anchors with multiple possible
+   * ID/attribute patterns depending on version and spec shape.  Try
+   * several selectors in order so that both tag-level and
+   * operation-level links scroll reliably.
    */
   const handleDeepLink = useCallback(
     (elementId: string | null) => {
       if (!enableDeepLinking || !elementId || !containerRef.current) return;
 
-      // Try to find element in Redoc container
-      const element = containerRef.current.querySelector(`[id="${CSS.escape(elementId)}"]`);
-      if (element) {
-        scrollIntoView(element as HTMLElement);
-        if (onDeepLinkNavigate) {
-          onDeepLinkNavigate(elementId);
+      const container = containerRef.current;
+
+      // Helper: attempt to find an element by a selector and scroll to it.
+      const tryScroll = (selector: string): boolean => {
+        try {
+          const el = container.querySelector(selector) as HTMLElement | null;
+          if (el) {
+            scrollIntoView(el);
+            if (onDeepLinkNavigate) onDeepLinkNavigate(elementId);
+            return true;
+          }
+        } catch {
+          // CSS.escape or selector may throw — silently continue.
         }
+        return false;
+      };
+
+      // Candidates in priority order:
+      // 1. Standard id attribute (Redoc >= 2.x uses "tag/<Tag>" or "operation/<operationId>")
+      if (tryScroll(`[id="${CSS.escape(elementId)}"]`)) return;
+
+      // 2. Redoc uses "data-section-id" on <div> wrappers in some builds
+      if (tryScroll(`[data-section-id="${CSS.escape(elementId)}"]`)) return;
+
+      // 3. Named anchor fallback  (older Redoc / some spec shapes)
+      if (tryScroll(`a[name="${CSS.escape(elementId)}"]`)) return;
+
+      // 4. Try slug-ified version (spaces → hyphens, lowercase)
+      const slugId = elementId.toLowerCase().replace(/\s+/g, '-');
+      if (slugId !== elementId) {
+        if (tryScroll(`[id="${CSS.escape(slugId)}"]`)) return;
+        if (tryScroll(`[data-section-id="${CSS.escape(slugId)}"]`)) return;
+      }
+
+      // 5. Fall back to native browser hash scroll (works for simple anchors)
+      const anchor = document.getElementById(elementId) || document.getElementById(slugId);
+      if (anchor) {
+        scrollIntoView(anchor);
+        if (onDeepLinkNavigate) onDeepLinkNavigate(elementId);
       }
     },
     [enableDeepLinking, onDeepLinkNavigate],
@@ -199,6 +236,19 @@ export default function RedocViewer({
     const RedocStandalone = (window as any).Redoc;
 
     try {
+      // Fix #218: Redoc's theme engine does not resolve CSS custom
+      // properties — it consumes the raw string.  Read the computed value
+      // from the document at init-time so actual hex colours are passed.
+      const rootStyle = window.getComputedStyle(document.documentElement);
+      const primaryColor =
+        rootStyle.getPropertyValue('--ifm-color-primary').trim() || '#2e8555';
+      const bgColor =
+        rootStyle.getPropertyValue('--ifm-background-color').trim() || '#ffffff';
+      const surfaceColor =
+        rootStyle.getPropertyValue('--ifm-background-surface-color').trim() || '#f5f6f7';
+      const textColor =
+        rootStyle.getPropertyValue('--ifm-font-color-base').trim() || '#1c1e21';
+
       RedocStandalone.init(
         loadedSpec,
         {
@@ -207,13 +257,29 @@ export default function RedocViewer({
           disableSidebar,
           expandTagsByDefault,
           nativeScrollbars: true,
+          untrustedSpec: false,
+          suppressWarnings: true,
           theme: {
             rightPanel: {
-              backgroundColor: 'var(--ifm-background-surface-secondary)',
+              backgroundColor: surfaceColor || '#f5f6f7',
             },
             colors: {
-              primary: 'var(--ifm-color-primary)',
-              error: 'var(--ifm-color-danger)',
+              primary: {
+                main: primaryColor,
+              },
+              error: {
+                main: '#f93e3e',
+              },
+              text: {
+                primary: textColor,
+              },
+              background: bgColor,
+            },
+            sidebar: {
+              activeTextColor: primaryColor,
+            },
+            typography: {
+              fontFamily: 'inherit',
             },
           },
         },

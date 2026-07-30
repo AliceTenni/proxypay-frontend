@@ -136,7 +136,11 @@ export default function APISidebarNav({
   };
 
   /**
-   * Handle endpoint click
+   * Handle endpoint click — select, update hash, and scroll target into view.
+   *
+   * Fix #228: After updating the hash, scan the page for the Redoc-rendered
+   * section element and scroll it into view so the TOC link actually
+   * navigates to the corresponding section.
    */
   const handleEndpointClick = (endpoint: ParsedEndpoint) => {
     setSelectedEndpointId(endpoint.id);
@@ -146,10 +150,39 @@ export default function APISidebarNav({
     if (enableDeepLinking) {
       window.location.hash = toEndpointLink(endpoint.id);
     }
+
+    // Attempt a direct scroll to the Redoc-rendered section.
+    // Redoc may use several ID patterns; try each in order.
+    requestAnimationFrame(() => {
+      const candidates = [
+        endpoint.id,
+        endpoint.id.toLowerCase().replace(/\s+/g, '-'),
+        // Redoc <= 2.x uses "tag/<Tag>/<method><Path>" patterns
+        `tag/${endpoint.tag || 'default'}/${endpoint.method.toLowerCase()}${endpoint.path}`,
+      ];
+
+      for (const candidateId of candidates) {
+        try {
+          const el =
+            document.querySelector(`[id="${CSS.escape(candidateId)}"]`) ||
+            document.querySelector(`[data-section-id="${CSS.escape(candidateId)}"]`) ||
+            document.getElementById(candidateId);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+          }
+        } catch {
+          // Malformed selector — skip.
+        }
+      }
+    });
   };
 
   /**
-   * Handle tag click
+   * Handle tag click — expand, update hash, and scroll tag heading into view.
+   *
+   * Fix #228: After expanding the tag group and updating the hash, scroll
+   * the Redoc tag-section heading into view so the TOC link is functional.
    */
   const handleTagClick = (tag: string) => {
     // Expand the tag if not already expanded
@@ -162,6 +195,31 @@ export default function APISidebarNav({
     if (enableDeepLinking) {
       window.location.hash = toTagLink(tag);
     }
+
+    // Scroll to the Redoc-rendered tag section heading.
+    requestAnimationFrame(() => {
+      const slugTag = tag.toLowerCase().replace(/\s+/g, '-');
+      const candidates = [
+        tag,
+        slugTag,
+        `tag/${tag}`,
+        `tag/${slugTag}`,
+      ];
+      for (const candidateId of candidates) {
+        try {
+          const el =
+            document.querySelector(`[id="${CSS.escape(candidateId)}"]`) ||
+            document.querySelector(`[data-section-id="${CSS.escape(candidateId)}"]`) ||
+            document.getElementById(candidateId);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+          }
+        } catch {
+          // Malformed selector — skip.
+        }
+      }
+    });
   };
 
   return (
