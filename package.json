@@ -20,7 +20,10 @@
     "load-test:scenario:rate-limit": "ts-node src/load-test.ts --scenarios rate-limit-flow",
     "load-test:scenario:docs": "ts-node src/load-test.ts --scenarios documentation-flow",
     "load-test:scenario:rampup": "ts-node src/load-test.ts --scenarios ramp-up-analysis",
-    "load-test:list": "ts-node src/load-test.ts --list-profiles"
+    "load-test:list": "ts-node src/load-test.ts --list-profiles",
+    "test": "npm run test:history && npm run test:component",
+    "test:history": "ts-node src/hooks/__tests__/useRequestHistory.test.ts",
+    "test:component": "ts-node src/components/__tests__/RequestHistory.test.ts"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRequestHistory } from '../hooks/useRequestHistory';
+import { RequestHistory } from './RequestHistory';
 
 interface MockConfig {
   id: string;
@@ -62,7 +64,8 @@ function saveConfigs(configs: MockConfig[]): void {
 export default function MockPanel(): React.JSX.Element {
   const [configs, setConfigs] = useState<MockConfig[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'saved'>('editor');
+  const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'saved' | 'history'>('editor');
+  const { history, addEntry, clearHistory } = useRequestHistory();
 
   // Editor state
   const [name, setName] = useState('');
@@ -162,9 +165,13 @@ export default function MockPanel(): React.JSX.Element {
     setConfigs(updated);
     saveConfigs(updated);
     setSelectedConfigId(newConfig.id);
+    
+    // Add to request history
+    addEntry(method, path, statusCode, latency);
+    
     setCopyFeedback('Saved!');
     setTimeout(() => setCopyFeedback(''), 1500);
-  }, [configs, selectedConfigId, name, method, path, statusCode, headers, body, latency, simulateError, errorBody]);
+  }, [configs, selectedConfigId, name, method, path, statusCode, headers, body, latency, simulateError, errorBody, addEntry]);
 
   const deleteConfig = useCallback(
     (id: string) => {
@@ -187,6 +194,13 @@ export default function MockPanel(): React.JSX.Element {
     setBody((prev) => prev + ' ' + variable);
   }, []);
 
+  const loadFromHistory = useCallback((method: string, path: string) => {
+    setMethod(method);
+    setPath(path);
+    setName(`${method} ${path}`);
+    setActiveTab('editor');
+  }, []);
+
   return (
     <div className="mock-panel">
       <div className="mock-panel-header">
@@ -207,6 +221,9 @@ export default function MockPanel(): React.JSX.Element {
         </button>
         <button className={`mock-tab ${activeTab === 'saved' ? 'active' : ''}`} onClick={() => setActiveTab('saved')}>
           💾 Saved ({configs.length})
+        </button>
+        <button className={`mock-tab ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
+          📜 History ({history.length})
         </button>
       </div>
 
@@ -381,6 +398,12 @@ export default function MockPanel(): React.JSX.Element {
                 ))}
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'history' && (
+        <div className="mock-history">
+          <RequestHistory history={history} onLoad={loadFromHistory} onClear={clearHistory} />
         </div>
       )}
     </div>
