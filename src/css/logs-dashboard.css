@@ -723,6 +723,21 @@
   border-radius: 8px;
 }
 
+/* Export Section */
+.export-section {
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.export-section .export-controls {
+  margin-bottom: 0;
+  box-shadow: none;
+  padding: 20px;
+}
+
 /* Export Controls */
 .export-controls {
   display: flex;
