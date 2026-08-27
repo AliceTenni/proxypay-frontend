@@ -1,10 +1,11 @@
 /**
  * Server Logs Analytics Dashboard
- * React component for visualizing log analytics
+ * React component for visualizing log analytics with timezone support
  */
 
 import React, { useState, useEffect } from 'react';
 import { AnalyticsResult, EndpointMetrics, ErrorAnalysis } from '../analytics/analytics-engine';
+import TimeZoneSelector, { formatDateInTimezone, detectUserTimezone } from './TimeZoneSelector';
 import '../css/logs-dashboard.css';
 
 interface DashboardProps {
@@ -20,10 +21,22 @@ export const LogsDashboard: React.FC<DashboardProps> = ({
 }) => {
   const [selectedTab, setSelectedTab] = useState('overview');
   const [filterText, setFilterText] = useState('');
+  const [timezone, setTimezone] = useState(() => {
+    // Try to get from localStorage, fallback to detected timezone
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('logsTimezone') : null;
+    return saved || detectUserTimezone();
+  });
 
-  // Format date for display
+  // Save timezone preference to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('logsTimezone', timezone);
+    }
+  }, [timezone]);
+
+  // Format date in selected timezone
   const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('en-US', {
+    return formatDateInTimezone(date, timezone, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -70,6 +83,13 @@ export const LogsDashboard: React.FC<DashboardProps> = ({
             <span className={`value ${analytics.errorRate > 5 ? 'error' : 'success'}`}>
               {formatPercent(analytics.errorRate)}
             </span>
+          </div>
+          <div className="info-item timezone-selector-item">
+            <TimeZoneSelector 
+              selectedTimezone={timezone}
+              onTimezoneChange={setTimezone}
+              compact={true}
+            />
           </div>
         </div>
       </div>
