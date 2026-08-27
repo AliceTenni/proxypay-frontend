@@ -989,3 +989,34 @@
     flex-wrap: wrap;
   }
 }
+
+/* ── Metric definitions: tooltip + glossary link ─────────────────── */
+.metric-info {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.8em;
+  color: #4ecdc4;
+  cursor: help;
+  border-radius: 50%;
+  outline-offset: 2px;
+}
+
+.metric-info:hover,
+.metric-info:focus-visible {
+  color: #2b9e96;
+}
+
+.metric-doc-link {
+  margin-left: 6px;
+  font-size: 0.72em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #4ecdc4;
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+
+.metric-doc-link:hover {
+  color: #2b9e96;
+}
